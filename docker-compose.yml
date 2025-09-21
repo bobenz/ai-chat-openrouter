@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ai-chat:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+    volumes:
+      - ./frontend:/app/frontend:ro
+    restart: unless-stopped
+    container_name: ai-chat-app

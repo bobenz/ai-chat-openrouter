@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E.S.T. Lab</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #4285f4;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .settings-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .settings-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #4285f4;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 5px;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            border-color: #4285f4;
+        }
+
+        .send-btn {
+            background: #4285f4;
+            border: none;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: #3367d6;
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4285f4;
+        }
+
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .btn-primary {
+            background: #4285f4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3367d6;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>AI Chat</h1>
+            <button class="settings-btn" onclick="openSettings()">Settings</button>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    Hello! I'm your AI assistant. Please configure your settings first by clicking the Settings button.
+                </div>
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" class="message-input" id="messageInput" placeholder="Type your message..." disabled>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+        </div>
+    </div>
+
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2>LLM Settings</h2>
+            <div id="errorContainer"></div>
+            
+            <div class="form-group">
+                <label for="systemPrompt">System Prompt:</label>
+                <textarea id="systemPrompt" placeholder="You are a helpful assistant.">You are a helpful assistant.</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="model">Model:</label>
+                <select id="model">
+                    <option value="">Loading models...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="password" id="apiKey" placeholder="Your OpenRouter API key">
+            </div>
+            
+            <div class="form-group">
+                <label for="temperature">Temperature (0-2):</label>
+                <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.7">
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let messages = [];
+        let settings = {
+            systemPrompt: 'You are a helpful assistant.',
+            model: 'openai/gpt-3.5-turbo',
+            apiKey: '',
+            temperature: 0.7
+        };
+
+        let availableModels = [];
+
+        function loadSettings() {
+            const saved = localStorage.getItem('llmSettings');
+            if (saved) {
+                settings = { ...settings, ...JSON.parse(saved) };
+                updateUI();
+            }
+        }
+
+        function saveSettingsToStorage() {
+            localStorage.setItem('llmSettings', JSON.stringify(settings));
+        }
+
+        function updateUI() {
+            const isConfigured = settings.apiKey !== '';
+            document.getElementById('messageInput').disabled = !isConfigured;
+            document.getElementById('sendBtn').disabled = !isConfigured;
+            
+            if (isConfigured) {
+                document.getElementById('messageInput').placeholder = 'Type your message...';
+            } else {
+                document.getElementById('messageInput').placeholder = 'Please configure settings first...';
+            }
+        }
+
+        async function loadModels() {
+            try {
+                const response = await fetch('http://localhost:8000/models');
+                const data = await response.json();
+                availableModels = data.models;
+                
+                const modelSelect = document.getElementById('model');
+                modelSelect.innerHTML = '';
+                
+                availableModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = `${model.name} - ${model.description.substring(0, 50)}${model.description.length > 50 ? '...' : ''}`;
+                    modelSelect.appendChild(option);
+                });
+                
+                // Set default if available
+                if (settings.model && availableModels.find(m => m.id === settings.model)) {
+                    modelSelect.value = settings.model;
+                } else if (availableModels.length > 0) {
+                    settings.model = availableModels[0].id;
+                    modelSelect.value = settings.model;
+                }
+            } catch (error) {
+                console.error('Failed to load models:', error);
+                // Fallback models
+                const modelSelect = document.getElementById('model');
+                modelSelect.innerHTML = `
+                    <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="openai/gpt-4">GPT-4</option>
+                    <option value="anthropic/claude-3-sonnet">Claude 3 Sonnet</option>
+                    <option value="google/gemini-pro">Gemini Pro</option>
+                `;
+            }
+        }
+
+        function openSettings() {
+            document.getElementById('systemPrompt').value = settings.systemPrompt;
+            document.getElementById('model').value = settings.model;
+            document.getElementById('apiKey').value = settings.apiKey;
+            document.getElementById('temperature').value = settings.temperature;
+            document.getElementById('errorContainer').innerHTML = '';
+            document.getElementById('settingsModal').style.display = 'block';
+            
+            // Load models if not already loaded
+            if (availableModels.length === 0) {
+                loadModels();
+            }
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            const systemPrompt = document.getElementById('systemPrompt').value;
+            const model = document.getElementById('model').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+
+            if (!apiKey.trim()) {
+                showError('API Key is required');
+                return;
+            }
+
+            if (temperature < 0 || temperature > 2) {
+                showError('Temperature must be between 0 and 2');
+                return;
+            }
+
+            settings = { systemPrompt, model, apiKey, temperature };
+            saveSettingsToStorage();
+            updateUI();
+            closeSettings();
+            
+            addMessage('assistant', 'Settings saved! You can now start chatting.');
+        }
+
+        function showError(message) {
+            document.getElementById('errorContainer').innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function addMessage(role, content) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function addLoadingMessage() {
+            addMessage('assistant', '<span class="loading">Thinking...</span>');
+        }
+
+        function removeLoadingMessage() {
+            const messages = document.querySelectorAll('.message.assistant .loading');
+            if (messages.length > 0) {
+                messages[messages.length - 1].parentElement.parentElement.remove();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !settings.apiKey) return;
+
+            addMessage('user', message);
+            messages.push({ role: 'user', content: message });
+            input.value = '';
+            
+            addLoadingMessage();
+            
+            try {
+                const response = await fetch('http://localhost:8000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: messages,
+                        system_prompt: settings.systemPrompt,
+                        model: settings.model,
+                        api_key: settings.apiKey,
+                        temperature: settings.temperature
+                    })
+                });
+
+                const data = await response.json();
+                removeLoadingMessage();
+                
+                if (data.response) {
+                    addMessage('assistant', data.response);
+                    messages.push({ role: 'assistant', content: data.response });
+                } else {
+                    addMessage('assistant', 'Sorry, I encountered an error processing your request.');
+                }
+            } catch (error) {
+                removeLoadingMessage();
+                addMessage('assistant', 'Error connecting to the server. Please make sure the backend is running.');
+                console.error('Error:', error);
+            }
+        }
+
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('settingsModal');
+            if (event.target === modal) {
+                closeSettings();
+            }
+        }
+
+        loadSettings();
+        updateUI();
+        loadModels();
+    </script>
+</body>
+</html>
