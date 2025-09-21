@@ -247,6 +247,67 @@
             border-radius: 5px;
             margin-bottom: 15px;
         }
+
+        .model-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .model-selector input {
+            flex: 1;
+        }
+
+        .model-browser {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .model-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .model-table th,
+        .model-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .model-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            user-select: none;
+        }
+
+        .model-table th:hover {
+            background: #e9e9e9;
+        }
+
+        .model-table tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+        .model-table tbody tr.selected {
+            background: #e3f2fd;
+        }
+
+        .sort-indicator {
+            margin-left: 5px;
+            font-size: 12px;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -281,10 +342,11 @@
             </div>
             
             <div class="form-group">
-                <label for="model">Model:</label>
-                <select id="model">
-                    <option value="">Loading models...</option>
-                </select>
+                <label for="model">Select Model:</label>
+                <div class="model-selector">
+                    <input type="text" id="selectedModel" placeholder="Click 'Browse Models' to select" readonly>
+                    <button type="button" class="btn btn-secondary" onclick="openModelBrowser()">Browse Models</button>
+                </div>
             </div>
             
             <div class="form-group">
@@ -304,6 +366,35 @@
         </div>
     </div>
 
+    <div class="modal" id="modelBrowserModal">
+        <div class="modal-content" style="width: 95%; max-width: 900px;">
+            <h2>Select Model (517 available)</h2>
+            
+            <input type="text" class="search-box" id="modelSearch" placeholder="Search models by name..." oninput="filterModels()">
+            
+            <div class="model-browser">
+                <table class="model-table" id="modelTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('name')">Model Name <span class="sort-indicator" id="sort-name"></span></th>
+                            <th onclick="sortTable('size')">Size <span class="sort-indicator" id="sort-size"></span></th>
+                            <th onclick="sortTable('context')">Context <span class="sort-indicator" id="sort-context"></span></th>
+                            <th onclick="sortTable('price')">Price/1M <span class="sort-indicator" id="sort-price"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="modelTableBody">
+                        <tr><td colspan="4">Loading models...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeModelBrowser()">Cancel</button>
+                <button class="btn btn-primary" onclick="selectModel()" disabled id="selectModelBtn">Select Model</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let messages = [];
         let settings = {
@@ -314,12 +405,16 @@
         };
 
         let availableModels = [];
+        let filteredModels = [];
+        let currentSort = { field: 'prompt_cost', direction: 'asc' };
+        let selectedModelRow = null;
 
         function loadSettings() {
             const saved = localStorage.getItem('llmSettings');
             if (saved) {
                 settings = { ...settings, ...JSON.parse(saved) };
                 updateUI();
+                updateSelectedModelDisplay();
             }
         }
 
@@ -339,54 +434,161 @@
             }
         }
 
+        function updateSelectedModelDisplay() {
+            const selectedModel = availableModels.find(m => m.id === settings.model);
+            if (selectedModel) {
+                document.getElementById('selectedModel').value = `${selectedModel.name} [${selectedModel.size}, ${selectedModel.context}, ${selectedModel.price}]`;
+            }
+        }
+
         async function loadModels() {
             try {
                 const response = await fetch('http://localhost:8000/models');
                 const data = await response.json();
                 availableModels = data.models;
+                filteredModels = [...availableModels];
                 
-                const modelSelect = document.getElementById('model');
-                modelSelect.innerHTML = '';
-                
-                availableModels.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model.id;
-                    option.textContent = model.display_name || model.name;
-                    modelSelect.appendChild(option);
-                });
-                
-                // Set default if available
-                if (settings.model && availableModels.find(m => m.id === settings.model)) {
-                    modelSelect.value = settings.model;
-                } else if (availableModels.length > 0) {
+                // Set default if none selected
+                if (!settings.model && availableModels.length > 0) {
                     settings.model = availableModels[0].id;
-                    modelSelect.value = settings.model;
                 }
+                updateSelectedModelDisplay();
+                
             } catch (error) {
                 console.error('Failed to load models:', error);
-                // Fallback models
-                const modelSelect = document.getElementById('model');
-                modelSelect.innerHTML = `
-                    <option value="openai/gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                    <option value="openai/gpt-4">GPT-4</option>
-                    <option value="anthropic/claude-3-sonnet">Claude 3 Sonnet</option>
-                    <option value="google/gemini-pro">Gemini Pro</option>
-                `;
+                availableModels = [
+                    {"id": "openai/gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "size": "Unknown", "context": "16K", "price": "$0.50/$1.50", "prompt_cost": 0.5}
+                ];
+                filteredModels = [...availableModels];
+            }
+        }
+
+        function openModelBrowser() {
+            document.getElementById('modelBrowserModal').style.display = 'block';
+            if (availableModels.length === 0) {
+                loadModels().then(() => {
+                    renderModelTable();
+                });
+            } else {
+                renderModelTable();
+            }
+        }
+
+        function closeModelBrowser() {
+            document.getElementById('modelBrowserModal').style.display = 'none';
+            selectedModelRow = null;
+            document.getElementById('selectModelBtn').disabled = true;
+        }
+
+        function renderModelTable() {
+            const tbody = document.getElementById('modelTableBody');
+            if (filteredModels.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No models found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filteredModels.map(model => 
+                `<tr onclick="selectTableRow(this, '${model.id}')" data-model-id="${model.id}">
+                    <td>${model.name}</td>
+                    <td>${model.size}</td>
+                    <td>${model.context}</td>
+                    <td>${model.price}</td>
+                </tr>`
+            ).join('');
+
+            // Update model count
+            document.querySelector('#modelBrowserModal h2').textContent = `Select Model (${filteredModels.length} available)`;
+        }
+
+        function selectTableRow(row, modelId) {
+            // Remove previous selection
+            if (selectedModelRow) {
+                selectedModelRow.classList.remove('selected');
+            }
+            
+            // Select new row
+            row.classList.add('selected');
+            selectedModelRow = row;
+            
+            // Enable select button
+            document.getElementById('selectModelBtn').disabled = false;
+        }
+
+        function selectModel() {
+            if (selectedModelRow) {
+                const modelId = selectedModelRow.dataset.modelId;
+                settings.model = modelId;
+                updateSelectedModelDisplay();
+                closeModelBrowser();
+            }
+        }
+
+        function filterModels() {
+            const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+            filteredModels = availableModels.filter(model => 
+                model.name.toLowerCase().includes(searchTerm) ||
+                model.id.toLowerCase().includes(searchTerm)
+            );
+            sortModels();
+            renderModelTable();
+        }
+
+        function sortTable(field) {
+            if (currentSort.field === field) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.field = field;
+                currentSort.direction = 'asc';
+            }
+            
+            sortModels();
+            renderModelTable();
+            updateSortIndicators();
+        }
+
+        function sortModels() {
+            filteredModels.sort((a, b) => {
+                let aVal = a[currentSort.field];
+                let bVal = b[currentSort.field];
+                
+                // Handle numeric fields
+                if (currentSort.field === 'context_length' || currentSort.field === 'prompt_cost') {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                }
+                
+                // Handle string fields
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+                
+                if (currentSort.direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+        }
+
+        function updateSortIndicators() {
+            // Clear all indicators
+            document.querySelectorAll('.sort-indicator').forEach(el => el.textContent = '');
+            
+            // Set current indicator
+            const indicator = document.getElementById(`sort-${currentSort.field}`);
+            if (indicator) {
+                indicator.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
             }
         }
 
         function openSettings() {
             document.getElementById('systemPrompt').value = settings.systemPrompt;
-            document.getElementById('model').value = settings.model;
             document.getElementById('apiKey').value = settings.apiKey;
             document.getElementById('temperature').value = settings.temperature;
             document.getElementById('errorContainer').innerHTML = '';
             document.getElementById('settingsModal').style.display = 'block';
-            
-            // Load models if not already loaded
-            if (availableModels.length === 0) {
-                loadModels();
-            }
+            updateSelectedModelDisplay();
         }
 
         function closeSettings() {
@@ -395,7 +597,6 @@
 
         function saveSettings() {
             const systemPrompt = document.getElementById('systemPrompt').value;
-            const model = document.getElementById('model').value;
             const apiKey = document.getElementById('apiKey').value;
             const temperature = parseFloat(document.getElementById('temperature').value);
 
@@ -404,12 +605,20 @@
                 return;
             }
 
+            if (!settings.model) {
+                showError('Please select a model');
+                return;
+            }
+
             if (temperature < 0 || temperature > 2) {
                 showError('Temperature must be between 0 and 2');
                 return;
             }
 
-            settings = { systemPrompt, model, apiKey, temperature };
+            settings.systemPrompt = systemPrompt;
+            settings.apiKey = apiKey;
+            settings.temperature = temperature;
+            
             saveSettingsToStorage();
             updateUI();
             closeSettings();
@@ -492,9 +701,13 @@
         });
 
         window.onclick = function(event) {
-            const modal = document.getElementById('settingsModal');
-            if (event.target === modal) {
+            const settingsModal = document.getElementById('settingsModal');
+            const modelBrowserModal = document.getElementById('modelBrowserModal');
+            
+            if (event.target === settingsModal) {
                 closeSettings();
+            } else if (event.target === modelBrowserModal) {
+                closeModelBrowser();
             }
         }
 

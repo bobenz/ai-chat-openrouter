@@ -34,52 +34,76 @@ class ChatResponse(BaseModel):
 
 @app.get("/models")
 async def get_models():
-    # Comprehensive list of text-to-text models from OpenRouter with sizes, context, and pricing
-    return {"models": [
-        # Free models
-        {"id": "microsoft/wizardlm-2-8x22b", "name": "WizardLM 2 8x22B", "display_name": "WizardLM 2 [8x22B, 65K ctx, FREE]"},
-        {"id": "google/gemma-2-9b-it:free", "name": "Gemma 2 9B (free)", "display_name": "Gemma 2 [9B, 8K ctx, FREE]"},
-        {"id": "meta-llama/llama-3.1-8b-instruct:free", "name": "Llama 3.1 8B (free)", "display_name": "Llama 3.1 [8B, 128K ctx, FREE]"},
-        {"id": "microsoft/phi-3-mini-128k-instruct:free", "name": "Phi-3 Mini (free)", "display_name": "Phi-3 Mini [3.8B, 128K ctx, FREE]"},
+    try:
+        response = requests.get("https://openrouter.ai/api/v1/models")
+        models_data = response.json()
         
-        # Ultra-cheap models
-        {"id": "meta-llama/llama-3.2-1b-instruct", "name": "Llama 3.2 1B", "display_name": "Llama 3.2 [1B, 128K ctx, $0.04/$0.04/1M]"},
-        {"id": "meta-llama/llama-3.2-3b-instruct", "name": "Llama 3.2 3B", "display_name": "Llama 3.2 [3B, 128K ctx, $0.06/$0.06/1M]"},
-        {"id": "google/gemma-2-9b-it", "name": "Gemma 2 9B", "display_name": "Gemma 2 [9B, 8K ctx, $0.08/$0.08/1M]"},
-        {"id": "qwen/qwen-2-7b-instruct", "name": "Qwen 2 7B", "display_name": "Qwen 2 [7B, 128K ctx, $0.09/$0.09/1M]"},
+        # Filter for text-to-text models only
+        text_models = []
+        for model in models_data.get("data", []):
+            modalities = model.get("architecture", {})
+            input_modalities = modalities.get("input_modalities", [])
+            output_modalities = modalities.get("output_modalities", [])
+            
+            # Only include models that support text input and text output
+            if "text" in input_modalities and "text" in output_modalities:
+                model_id = model.get("id", "")
+                model_name = model.get("name", model_id)
+                context_length = model.get("context_length", 0)
+                
+                # Extract model size from ID or name
+                size_info = "Unknown"
+                size_patterns = ["405b", "70b", "72b", "34b", "22b", "13b", "8b", "7b", "3b", "1b", "500m", "100m"]
+                for size in size_patterns:
+                    if size in model_id.lower() or size in model_name.lower():
+                        size_info = size.upper()
+                        break
+                
+                # Format context length
+                if context_length >= 1000000:
+                    context_display = f"{context_length//1000000}M"
+                elif context_length >= 1000:
+                    context_display = f"{context_length//1000}K"
+                else:
+                    context_display = str(context_length) if context_length > 0 else "Unknown"
+                
+                # Get pricing
+                pricing = model.get("pricing", {})
+                prompt_price = pricing.get("prompt", "0")
+                completion_price = pricing.get("completion", "0")
+                
+                try:
+                    prompt_cost = float(prompt_price) * 1000000 if prompt_price else 0
+                    completion_cost = float(completion_price) * 1000000 if completion_price else 0
+                    if prompt_cost == 0 and completion_cost == 0:
+                        price_display = "FREE"
+                    else:
+                        price_display = f"${prompt_cost:.2f}/${completion_cost:.2f}"
+                except:
+                    price_display = "Unknown"
+                
+                text_models.append({
+                    "id": model_id,
+                    "name": model_name,
+                    "size": size_info,
+                    "context": context_display,
+                    "context_length": context_length,
+                    "price": price_display,
+                    "prompt_cost": float(prompt_price) * 1000000 if prompt_price else 0,
+                    "completion_cost": float(completion_price) * 1000000 if completion_price else 0,
+                    "description": model.get("description", "")
+                })
         
-        # Budget models
-        {"id": "meta-llama/llama-3.1-8b-instruct", "name": "Llama 3.1 8B", "display_name": "Llama 3.1 [8B, 128K ctx, $0.18/$0.18/1M]"},
-        {"id": "mistralai/mistral-7b-instruct", "name": "Mistral 7B", "display_name": "Mistral [7B, 32K ctx, $0.20/$0.20/1M]"},
-        {"id": "anthropic/claude-3-haiku", "name": "Claude 3 Haiku", "display_name": "Claude 3 Haiku [200K ctx, $0.25/$1.25/1M]"},
-        {"id": "google/gemini-flash-1.5", "name": "Gemini 1.5 Flash", "display_name": "Gemini 1.5 Flash [1M ctx, $0.38/$1.13/1M]"},
+        # Sort by prompt cost (cheapest first)
+        text_models.sort(key=lambda x: x["prompt_cost"])
         
-        # Mid-tier models
-        {"id": "openai/gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "display_name": "GPT-3.5 Turbo [16K ctx, $0.50/$1.50/1M]"},
-        {"id": "meta-llama/llama-3.1-70b-instruct", "name": "Llama 3.1 70B", "display_name": "Llama 3.1 [70B, 128K ctx, $0.88/$0.88/1M]"},
-        {"id": "mistralai/mixtral-8x7b-instruct", "name": "Mixtral 8x7B", "display_name": "Mixtral [8x7B, 32K ctx, $0.24/$0.24/1M]"},
-        {"id": "mistralai/mixtral-8x22b-instruct", "name": "Mixtral 8x22B", "display_name": "Mixtral [8x22B, 65K ctx, $1.20/$1.20/1M]"},
-        {"id": "google/gemini-pro-1.5", "name": "Gemini 1.5 Pro", "display_name": "Gemini 1.5 Pro [2M ctx, $1.25/$5.00/1M]"},
+        return {"models": text_models}
         
-        # Premium models
-        {"id": "anthropic/claude-3-sonnet", "name": "Claude 3 Sonnet", "display_name": "Claude 3 Sonnet [200K ctx, $3.00/$15.00/1M]"},
-        {"id": "cohere/command-r", "name": "Command R", "display_name": "Command R [128K ctx, $0.50/$1.50/1M]"},
-        {"id": "cohere/command-r-plus", "name": "Command R+", "display_name": "Command R+ [128K ctx, $3.00/$15.00/1M]"},
-        {"id": "x-ai/grok-beta", "name": "Grok Beta", "display_name": "Grok Beta [131K ctx, $5.00/$15.00/1M]"},
-        
-        # High-end models
-        {"id": "openai/gpt-4o", "name": "GPT-4o", "display_name": "GPT-4o [128K ctx, $5.00/$15.00/1M]"},
-        {"id": "openai/gpt-4-turbo", "name": "GPT-4 Turbo", "display_name": "GPT-4 Turbo [128K ctx, $10.00/$30.00/1M]"},
-        {"id": "anthropic/claude-3-opus", "name": "Claude 3 Opus", "display_name": "Claude 3 Opus [200K ctx, $15.00/$75.00/1M]"},
-        {"id": "openai/gpt-4", "name": "GPT-4", "display_name": "GPT-4 [8K ctx, $30.00/$60.00/1M]"},
-        
-        # Specialized models
-        {"id": "perplexity/llama-3.1-sonar-large-128k-online", "name": "Llama 3.1 Sonar 70B Online", "display_name": "Llama 3.1 Sonar [70B, 128K ctx, Online, $1.00/$1.00/1M]"},
-        {"id": "deepseek/deepseek-chat", "name": "DeepSeek Chat", "display_name": "DeepSeek Chat [67B, 32K ctx, $0.14/$0.28/1M]"},
-        {"id": "meta-llama/llama-3.1-405b-instruct", "name": "Llama 3.1 405B", "display_name": "Llama 3.1 [405B, 128K ctx, $5.32/$16.00/1M]"},
-        {"id": "mistralai/mistral-large", "name": "Mistral Large", "display_name": "Mistral Large [128K ctx, $2.00/$6.00/1M]"},
-        {"id": "01-ai/yi-large", "name": "Yi Large", "display_name": "Yi Large [32K ctx, $3.00/$3.00/1M]"},
-    ]}
+    except Exception as e:
+        # Minimal fallback
+        return {"models": [
+            {"id": "openai/gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "size": "Unknown", "context": "16K", "context_length": 16000, "price": "$0.50/$1.50", "prompt_cost": 0.5, "completion_cost": 1.5, "description": "Fast and capable"}
+        ]}
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
