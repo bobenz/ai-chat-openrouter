@@ -120,7 +120,7 @@ async def chat(request: ChatRequest):
         headers = {
             "Authorization": f"Bearer {request.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
+            "HTTP-Referer": "http://est.bobenz.info",
             "X-Title": "AI Chat App"
         }
         
