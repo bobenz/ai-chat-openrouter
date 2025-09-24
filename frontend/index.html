@@ -443,7 +443,7 @@
 
         async function loadModels() {
             try {
-                const response = await fetch('http://localhost:8000/models');
+                const response = await fetch('http://est.bobenz.info/models');
                 const data = await response.json();
                 availableModels = data.models;
                 filteredModels = [...availableModels];
